@@ -8,6 +8,7 @@ seeds:
  completer.add_seed(18247566)
  completer.add_seed(9281839)
 """
+
 import os
 import re
 import atexit
@@ -17,7 +18,7 @@ from ldm.invoke.args import Args
 try:
     import readline
     readline_available = True
-except (ImportError,ModuleNotFoundError):
+except ImportError:
     readline_available = False
 
 IMG_EXTENSIONS     = ('.png','.jpg','.jpeg','.PNG','.JPG','.JPEG','.gif','.GIF')
@@ -66,7 +67,7 @@ class Completer(object):
     def __init__(self, options):
         self.options     = sorted(options)
         self.seeds       = set()
-        self.matches     = list()
+        self.matches = []
         self.default_dir = None
         self.linebuffer  = None
         self.auto_history_active = True
@@ -155,13 +156,13 @@ class Completer(object):
         Print the session history using the pydoc pager
         '''
         import pydoc
-        lines = list()
+        lines = []
         h_len = self.get_current_history_length()
         if h_len < 1:
             print('<empty history>')
             return
-        
-        for i in range(0,h_len):
+
+        for i in range(h_len):
             line = self.get_history_item(i+1)
             if match and match not in line:
                 continue
@@ -173,18 +174,14 @@ class Completer(object):
         readline.redisplay()
 
     def _seed_completions(self, text, state):
-        m = re.search('(-S\s?|--seed[=\s]?)(\d*)',text)
-        if m:
+        if m := re.search('(-S\s?|--seed[=\s]?)(\d*)', text):
             switch  = m.groups()[0]
             partial = m.groups()[1]
         else:
             switch  = ''
             partial = text
 
-        matches = list()
-        for s in self.seeds:
-            if s.startswith(partial):
-                matches.append(switch+s)
+        matches = [switch+s for s in self.seeds if s.startswith(partial)]
         matches.sort()
         return matches
 
@@ -204,7 +201,7 @@ class Completer(object):
             switch,partial_path  = match.groups()
         partial_path = partial_path.lstrip()
 
-        matches = list()
+        matches = []
         path = os.path.expanduser(partial_path)
 
         if os.path.isdir(path):
@@ -232,7 +229,7 @@ class Completer(object):
 
             if switch is None:
                 match_path = os.path.join(dir,node)
-                matches.append(match_path+'/' if os.path.isdir(full_path) else match_path)
+                matches.append(f'{match_path}/' if os.path.isdir(full_path) else match_path)
             elif os.path.isdir(full_path):
                 matches.append(
                     switch+os.path.join(os.path.dirname(full_path), node) + '/'
@@ -246,13 +243,13 @@ class Completer(object):
 class DummyCompleter(Completer):
     def __init__(self,options):
         super().__init__(options)
-        self.history = list()
+        self.history = []
         
     def add_history(self,line):
         self.history.append(line)
 
     def clear_history(self):
-        self.history = list()
+        self.history = []
 
     def get_current_history_length(self):
         return len(self.history)

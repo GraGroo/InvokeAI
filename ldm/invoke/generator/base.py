@@ -59,7 +59,7 @@ class Generator():
         first_seed          = seed
         seed, initial_noise = self.generate_initial_noise(seed, width, height)
         with scope(self.model.device.type), self.model.ema_scope():
-            for n in trange(iterations, desc='Generating'):
+            for _ in trange(iterations, desc='Generating'):
                 x_T = None
                 if self.variation_amount > 0:
                     seed_everything(seed)

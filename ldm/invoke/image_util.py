@@ -19,7 +19,7 @@ class InitImageResizer():
         that it can be passed to img2img()
         """
         im    = self.image
-        
+
         ar = im.width/float(im.height)
 
         # Infer missing values from aspect ratio
@@ -44,14 +44,12 @@ class InitImageResizer():
         # no resize necessary, but return a copy
         if im.width == width and im.height == height:
             return im.copy()
-        
-        # otherwise resize the original image so that it fits inside the bounding box
-        resized_image = self.image.resize((rw,rh),resample=Image.Resampling.LANCZOS)
-        return resized_image
+
+        return self.image.resize((rw,rh),resample=Image.Resampling.LANCZOS)
 
 def make_grid(image_list, rows=None, cols=None):
-    image_cnt = len(image_list)
     if None in (rows, cols):
+        image_cnt = len(image_list)
         rows = floor(sqrt(image_cnt))  # try to make it square
         cols = ceil(image_cnt / rows)
     width = image_list[0].width
@@ -59,8 +57,8 @@ def make_grid(image_list, rows=None, cols=None):
 
     grid_img = Image.new('RGB', (width * cols, height * rows))
     i = 0
-    for r in range(0, rows):
-        for c in range(0, cols):
+    for r in range(rows):
+        for c in range(cols):
             if i >= len(image_list):
                 break
             grid_img.paste(image_list[i], (c * width, r * height))

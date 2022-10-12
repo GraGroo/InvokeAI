@@ -50,10 +50,12 @@ class FeedForward(nn.Module):
         super().__init__()
         inner_dim = int(dim * mult)
         dim_out = default(dim_out, dim)
-        project_in = nn.Sequential(
-            nn.Linear(dim, inner_dim),
-            nn.GELU()
-        ) if not glu else GEGLU(dim, inner_dim)
+        project_in = (
+            GEGLU(dim, inner_dim)
+            if glu
+            else nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU())
+        )
+
 
         self.net = nn.Sequential(
             project_in,
@@ -190,11 +192,10 @@ class CrossAttention(nn.Module):
         return r
 
     def einsum_op_mps_v1(self, q, k, v):
-        if q.shape[1] <= 4096: # (512x512) max q.shape[1]: 4096
+        if q.shape[1] <= 4096:
             return self.einsum_op_compvis(q, k, v)
-        else:
-            slice_size = math.floor(2**30 / (q.shape[0] * q.shape[1]))
-            return self.einsum_op_slice_1(q, k, v, slice_size)
+        slice_size = math.floor(2**30 / (q.shape[0] * q.shape[1]))
+        return self.einsum_op_slice_1(q, k, v, slice_size)
 
     def einsum_op_mps_v2(self, q, k, v):
         if self.mem_total_gb > 8 and q.shape[1] <= 4096:
@@ -293,9 +294,18 @@ class SpatialTransformer(nn.Module):
                                  padding=0)
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim)
-                for d in range(depth)]
+            [
+                BasicTransformerBlock(
+                    inner_dim,
+                    n_heads,
+                    d_head,
+                    dropout=dropout,
+                    context_dim=context_dim,
+                )
+                for _ in range(depth)
+            ]
         )
+
 
         self.proj_out = zero_module(nn.Conv2d(inner_dim,
                                               in_channels,
