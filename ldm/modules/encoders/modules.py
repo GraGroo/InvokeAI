@@ -85,8 +85,7 @@ class TransformerEmbedder(AbstractEncoder):
 
     def forward(self, tokens):
         tokens = tokens.to(self.device)  # meh
-        z = self.transformer(tokens, return_embeddings=True)
-        return z
+        return self.transformer(tokens, return_embeddings=True)
 
     def encode(self, x):
         return self(x)
@@ -130,15 +129,12 @@ class BERTTokenizer(AbstractEncoder):
             padding='max_length',
             return_tensors='pt',
         )
-        tokens = batch_encoding['input_ids'].to(self.device)
-        return tokens
+        return batch_encoding['input_ids'].to(self.device)
 
     @torch.no_grad()
     def encode(self, text):
         tokens = self(text)
-        if not self.vq_interface:
-            return tokens
-        return None, None, [None, None, tokens]
+        return (None, None, [None, None, tokens]) if self.vq_interface else tokens
 
     def decode(self, text):
         return text
@@ -172,14 +168,10 @@ class BERTEmbedder(AbstractEncoder):
         )
 
     def forward(self, text, embedding_manager=None):
-        if self.use_tknz_fn:
-            tokens = self.tknz_fn(text)  # .to(self.device)
-        else:
-            tokens = text
-        z = self.transformer(
+        tokens = self.tknz_fn(text) if self.use_tknz_fn else text
+        return self.transformer(
             tokens, return_embeddings=True, embedding_manager=embedding_manager
         )
-        return z
 
     def encode(self, text, **kwargs):
         # output of length 77
@@ -221,7 +213,7 @@ class SpatialRescaler(nn.Module):
             )
 
     def forward(self, x):
-        for stage in range(self.n_stages):
+        for _ in range(self.n_stages):
             x = self.interpolator(x, scale_factor=self.multiplier)
 
         if self.remap_output:
@@ -447,9 +439,7 @@ class FrozenCLIPEmbedder(AbstractEncoder):
             return_tensors='pt',
         )
         tokens = batch_encoding['input_ids'].to(self.device)
-        z = self.transformer(input_ids=tokens, **kwargs)
-
-        return z
+        return self.transformer(input_ids=tokens, **kwargs)
 
     def encode(self, text, **kwargs):
         return self(text, **kwargs)

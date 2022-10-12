@@ -61,10 +61,11 @@ class NoisyLatentImageClassifier(pl.LightningModule):
         self.log_steps = log_steps
 
         self.label_key = (
-            label_key
-            if not hasattr(self.diffusion_model, 'cond_stage_key')
-            else self.diffusion_model.cond_stage_key
+            self.diffusion_model.cond_stage_key
+            if hasattr(self.diffusion_model, 'cond_stage_key')
+            else label_key
         )
+
 
         assert (
             self.label_key is not None
@@ -87,13 +88,14 @@ class NoisyLatentImageClassifier(pl.LightningModule):
         for k in keys:
             for ik in ignore_keys:
                 if k.startswith(ik):
-                    print('Deleting key {} from state_dict.'.format(k))
+                    print(f'Deleting key {k} from state_dict.')
                     del sd[k]
         missing, unexpected = (
-            self.load_state_dict(sd, strict=False)
-            if not only_model
-            else self.model.load_state_dict(sd, strict=False)
+            self.model.load_state_dict(sd, strict=False)
+            if only_model
+            else self.load_state_dict(sd, strict=False)
         )
+
         print(
             f'Restored from {path} with {len(missing)} missing and {len(unexpected)} unexpected keys'
         )
@@ -172,13 +174,13 @@ class NoisyLatentImageClassifier(pl.LightningModule):
 
         if self.label_key == 'segmentation':
             targets = rearrange(targets, 'b h w c -> b c h w')
-            for down in range(self.numd):
+            for _ in range(self.numd):
                 h, w = targets.shape[-2:]
                 targets = F.interpolate(
                     targets, size=(h // 2, w // 2), mode='nearest'
                 )
 
-            # targets = rearrange(targets,'b c h w -> b h w c')
+                # targets = rearrange(targets,'b c h w -> b h w c')
 
         return targets
 
@@ -198,8 +200,7 @@ class NoisyLatentImageClassifier(pl.LightningModule):
     @torch.no_grad()
     def write_logs(self, loss, logits, targets):
         log_prefix = 'train' if self.training else 'val'
-        log = {}
-        log[f'{log_prefix}/loss'] = loss.mean()
+        log = {f'{log_prefix}/loss': loss.mean()}
         log[f'{log_prefix}/acc@1'] = self.compute_top_k(
             logits, targets, k=1, reduction='mean'
         )
@@ -320,10 +321,8 @@ class NoisyLatentImageClassifier(pl.LightningModule):
 
     @torch.no_grad()
     def log_images(self, batch, N=8, *args, **kwargs):
-        log = dict()
         x = self.get_input(batch, self.diffusion_model.first_stage_key)
-        log['inputs'] = x
-
+        log = {'inputs': x}
         y = self.get_conditioning(batch)
 
         if self.label_key == 'class_label':

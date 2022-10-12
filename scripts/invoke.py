@@ -57,7 +57,7 @@ def main():
                 print('>> Upscaling disabled')
         else:
             print('>> Face restoration and upscaling disabled')
-    except (ModuleNotFoundError, ImportError):
+    except ImportError:
         print(traceback.format_exc(), file=sys.stderr)
         print('>> You may need to install the ESRGAN and/or GFPGAN modules')
 
@@ -123,7 +123,7 @@ def main_loop(gen, opt, infile):
     """prompt/read/execute loop"""
     done = False
     path_filter = re.compile(r'[<>:"/\\|?*]')
-    last_results = list()
+    last_results = []
     model_config = OmegaConf.load(opt.conf)[opt.model]
 
     # The readline completer reads history from the .dream_history file located in the
@@ -145,7 +145,7 @@ def main_loop(gen, opt, infile):
 
         if completer:
             completer.set_default_dir(opt.outdir)
-            
+
         try:
             command = get_next_command(infile)
         except EOFError:
@@ -196,7 +196,7 @@ def main_loop(gen, opt, infile):
                 command    = completer.get_line(int(command_no))
                 completer.set_line(command)
                 continue
-                
+
             else:  # not a recognized subcommand, so give the --help text
                 command = '-h'
 
@@ -286,7 +286,7 @@ def main_loop(gen, opt, infile):
         try:
             file_writer      = PngWriter(current_outdir)
             results          = []  # list of filename, prompt pairs
-            grid_images      = dict()  # seed -> Image, only used if `opt.grid`
+            grid_images = {}
             prior_variations = opt.with_variations or []
             prefix = file_writer.unique_prefix()
 
@@ -303,7 +303,7 @@ def main_loop(gen, opt, infile):
                 if opt.grid:
                     grid_images[seed] = image
                 else:
-                    postprocessed = upscaled if upscaled else operation=='postprocess'
+                    postprocessed = upscaled or operation=='postprocess'
                     filename, formatted_dream_prompt = prepare_image_metadata(
                         opt,
                         prefix,
@@ -334,7 +334,7 @@ def main_loop(gen, opt, infile):
                             tool,
                             formatted_dream_prompt,
                         )                           
-                        
+
                     if (not postprocessed) or opt.save_original:
                         # only append to results if we didn't overwrite an earlier output
                         results.append([path, formatted_dream_prompt])
@@ -357,7 +357,7 @@ def main_loop(gen, opt, infile):
                 print(f'>> fixing {opt.prompt}')
                 opt.last_operation = do_postprocess(gen,opt,image_writer)
 
-            if opt.grid and len(grid_images) > 0:
+            if opt.grid and grid_images:
                 grid_img   = make_grid(list(grid_images.values()))
                 grid_seeds = list(grid_images.keys())
                 first_seed = last_results[0][1]
@@ -377,11 +377,7 @@ def main_loop(gen, opt, infile):
                 )
                 results = [[path, formatted_dream_prompt]]
 
-        except AssertionError as e:
-            print(e)
-            continue
-
-        except OSError as e:
+        except (AssertionError, OSError) as e:
             print(e)
             continue
 
@@ -470,15 +466,14 @@ def prepare_image_metadata(
     elif len(prior_variations) > 0:
         formatted_dream_prompt = opt.dream_prompt_str(seed=first_seed)
     elif operation == 'postprocess':
-        formatted_dream_prompt = '!fix '+opt.dream_prompt_str(seed=seed)
+        formatted_dream_prompt = f'!fix {opt.dream_prompt_str(seed=seed)}'
     else:
         formatted_dream_prompt = opt.dream_prompt_str(seed=seed)
     return filename,formatted_dream_prompt
 
 def choose_postprocess_name(opt,prefix,seed) -> str:
-    match      = re.search('postprocess:(\w+)',opt.last_operation)
-    if match:
-        modifier = match.group(1)   # will look like "gfpgan", "upscale", "outpaint" or "embiggen"
+    if match := re.search('postprocess:(\w+)', opt.last_operation):
+        modifier = match[1]
     else:
         modifier = 'postprocessed'
 
@@ -540,12 +535,7 @@ def split_variations(variations_string) -> list:
             broken = True
             break
         parts.append([seed, weight])
-    if broken:
-        return None
-    elif len(parts) == 0:
-        return None
-    else:
-        return parts
+    return None if broken or not parts else parts
 
 def retrieve_dream_command(opt,file_path,completer):
     '''
@@ -555,10 +545,7 @@ def retrieve_dream_command(opt,file_path,completer):
     for cut-and-paste (windows)
     '''
     dir,basename = os.path.split(file_path)
-    if len(dir) == 0:
-        path = os.path.join(opt.outdir,basename)
-    else:
-        path = file_path
+    path = os.path.join(opt.outdir,basename) if len(dir) == 0 else file_path
     try:
         cmd = dream_cmd_from_png(path)
     except OSError:

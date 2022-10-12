@@ -19,7 +19,7 @@ def log_txt_as_img(wh, xc, size=10):
     # wh a tuple of (width, height)
     # xc a list of captions to plot
     b = len(xc)
-    txts = list()
+    txts = []
     for bi in range(b):
         txt = Image.new('RGB', wh, color='white')
         draw = ImageDraw.Draw(txt)
@@ -42,15 +42,19 @@ def log_txt_as_img(wh, xc, size=10):
 
 
 def ismap(x):
-    if not isinstance(x, torch.Tensor):
-        return False
-    return (len(x.shape) == 4) and (x.shape[1] > 3)
+    return (
+        (len(x.shape) == 4) and (x.shape[1] > 3)
+        if isinstance(x, torch.Tensor)
+        else False
+    )
 
 
 def isimage(x):
-    if not isinstance(x, torch.Tensor):
-        return False
-    return (len(x.shape) == 4) and (x.shape[1] == 3 or x.shape[1] == 1)
+    return (
+        len(x.shape) == 4 and x.shape[1] in [3, 1]
+        if isinstance(x, torch.Tensor)
+        else False
+    )
 
 
 def exists(x):
@@ -104,10 +108,7 @@ def _do_parallel_data_prefetch(func, Q, data, idx, idx_to_fn=False):
     # create dummy dataset instance
 
     # run prefetching
-    if idx_to_fn:
-        res = func(data, worker_id=idx)
-    else:
-        res = func(data)
+    res = func(data, worker_id=idx) if idx_to_fn else func(data)
     Q.put([idx, res])
     Q.put('Done')
 
@@ -129,13 +130,11 @@ def parallel_data_prefetch(
     elif isinstance(data, abc.Iterable):
         if isinstance(data, dict):
             print(
-                f'WARNING:"data" argument passed to parallel_data_prefetch is a dict: Using only its values and disregarding keys.'
+                'WARNING:"data" argument passed to parallel_data_prefetch is a dict: Using only its values and disregarding keys.'
             )
+
             data = list(data.values())
-        if target_data_type == 'ndarray':
-            data = np.asarray(data)
-        else:
-            data = list(data)
+        data = np.asarray(data) if target_data_type == 'ndarray' else list(data)
     else:
         raise TypeError(
             f'The data, that shall be processed parallel has to be either an np.ndarray or an Iterable, but is actually {type(data)}.'
@@ -162,16 +161,17 @@ def parallel_data_prefetch(
         arguments = [
             [func, Q, part, i, use_worker_id]
             for i, part in enumerate(
-                [data[i : i + step] for i in range(0, len(data), step)]
+                data[i : i + step] for i in range(0, len(data), step)
             )
         ]
+
     processes = []
     for i in range(n_proc):
         p = proc(target=_do_parallel_data_prefetch, args=arguments[i])
         processes += [p]
 
     # start processes
-    print(f'Start prefetching...')
+    print('Start prefetching...')
     import time
 
     start = time.time()
@@ -201,11 +201,12 @@ def parallel_data_prefetch(
         print(f'Prefetching complete. [{time.time() - start} sec.]')
 
     if target_data_type == 'ndarray':
-        if not isinstance(gather_res[0], np.ndarray):
-            return np.concatenate([np.asarray(r) for r in gather_res], axis=0)
+        return (
+            np.concatenate(gather_res, axis=0)
+            if isinstance(gather_res[0], np.ndarray)
+            else np.concatenate([np.asarray(r) for r in gather_res], axis=0)
+        )
 
-        # order outputs
-        return np.concatenate(gather_res, axis=0)
     elif target_data_type == 'list':
         out = []
         for r in gather_res:

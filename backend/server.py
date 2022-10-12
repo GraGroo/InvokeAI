@@ -52,9 +52,7 @@ verbose = opt.verbose  # enables copious socket.io logging
 precision = opt.precision
 free_gpu_mem = opt.free_gpu_mem
 embedding_path = opt.embedding_path
-additional_allowed_origins = (
-    opt.cors if opt.cors else []
-)  # additional CORS allowed origins
+additional_allowed_origins = opt.cors or []
 model = "stable-diffusion-1.4"
 
 """
@@ -90,8 +88,8 @@ def serve(path):
     return send_from_directory(app.static_folder, "index.html")
 
 
-logger = True if verbose else False
-engineio_logger = True if verbose else False
+logger = bool(verbose)
+engineio_logger = bool(verbose)
 
 # default 1,000,000, needs to be higher for socketio to accept larger images
 max_http_buffer_size = 10000000
@@ -131,9 +129,7 @@ try:
     gfpgan, codeformer = restoration.load_face_restore_models()
     esrgan = restoration.load_esrgan()
 
-    # coreformer.process(self, image, strength, device, seed=None, fidelity=0.75)
-
-except (ModuleNotFoundError, ImportError):
+except ImportError:
     print(traceback.format_exc(), file=sys.stderr)
     print(">> You may need to install the ESRGAN and/or GFPGAN modules")
 
@@ -185,7 +181,7 @@ SOCKET.IO LISTENERS
 
 @socketio.on("requestSystemConfig")
 def handle_request_capabilities():
-    print(f">> System config requested")
+    print(">> System config requested")
     config = get_system_config()
     socketio.emit("systemConfig", config)
 
@@ -195,7 +191,7 @@ def handle_request_images(page=1, offset=0, last_mtime=None):
     chunk_size = 50
 
     if last_mtime:
-        print(f">> Latest images requested")
+        print(">> Latest images requested")
     else:
         print(
             f">> Page {page} of images requested (page size {chunk_size} offset {offset})"
@@ -231,7 +227,7 @@ def handle_request_images(page=1, offset=0, last_mtime=None):
             "images": image_array,
             "nextPage": page,
             "offset": offset,
-            "onlyNewImages": True if last_mtime else False,
+            "onlyNewImages": bool(last_mtime),
         },
     )
 
@@ -389,7 +385,7 @@ def handle_run_gfpgan_event(original_image, gfpgan_parameters):
 
 @socketio.on("cancel")
 def handle_cancel():
-    print(f">> Cancel processing requested")
+    print(">> Cancel processing requested")
     canceled.set()
     socketio.emit("processingCanceled")
 
@@ -520,7 +516,7 @@ def parameters_to_generated_image_metadata(parameters):
             }
         )
 
-    rfc_dict["postprocessing"] = postprocessing if len(postprocessing) > 0 else None
+    rfc_dict["postprocessing"] = postprocessing or None
 
     # semantic drift
     rfc_dict["sampler"] = parameters["sampler_name"]
@@ -582,24 +578,21 @@ def save_image(
 
     seed = "unknown_seed"
 
-    if "image" in metadata:
-        if "seed" in metadata["image"]:
-            seed = metadata["image"]["seed"]
+    if "image" in metadata and "seed" in metadata["image"]:
+        seed = metadata["image"]["seed"]
 
     filename = f"{prefix}.{seed}"
 
     if step_index:
         filename += f".{step_index}"
     if postprocessing:
-        filename += f".postprocessed"
+        filename += ".postprocessed"
 
     filename += ".png"
 
-    path = pngwriter.save_image_and_prompt_to_png(
+    return pngwriter.save_image_and_prompt_to_png(
         image=image, dream_prompt=command, metadata=metadata, name=filename
     )
-
-    return path
 
 
 def calculate_real_steps(steps, strength, has_init_image):

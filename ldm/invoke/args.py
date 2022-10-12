@@ -126,15 +126,13 @@ class ArgFormatter(argparse.RawTextHelpFormatter):
         if usage is not None:
             usage = usage % dict(prog=self._prog)
 
-        # if no optionals or positionals are available, usage is just prog
-        elif usage is None and not actions:
+        elif not actions:
             usage = 'invoke>'
-        elif usage is None:
+        else:
             prog='invoke>'
             # build full usage string
             action_usage = self._format_actions_usage(actions, groups) # NEW
             usage = ' '.join([s for s in [prog, action_usage] if s])
-            # omit the long line wrapping code
         # prefix with 'usage:'
         return '%s%s\n\n' % (prefix, usage)
 
@@ -187,7 +185,7 @@ class Args(object):
             else:
                 switches[0] += element
                 switches[0] += ' '
-        switches[0] = switches[0][: len(switches[0]) - 1]
+        switches[0] = switches[0][:-1]
         try:
             self._cmd_switches = self._cmd_parser.parse_args(switches)
             return self._cmd_switches
@@ -198,24 +196,23 @@ class Args(object):
         return json.dumps(self.to_dict(**kwargs))
 
     def to_dict(self,**kwargs):
-        a = vars(self)
-        a.update(kwargs)
-        return a
+        return vars(self) | kwargs
 
     # Isn't there a more automated way of doing this?
     # Ideally we get the switch strings out of the argparse objects,
     # but I don't see a documented API for this.
     def dream_prompt_str(self,**kwargs):
         """Normalized dream_prompt."""
-        a = vars(self)
-        a.update(kwargs)
-        switches = list()
-        switches.append(f'"{a["prompt"]}"')
-        switches.append(f'-s {a["steps"]}')
-        switches.append(f'-S {a["seed"]}')
-        switches.append(f'-W {a["width"]}')
-        switches.append(f'-H {a["height"]}')
-        switches.append(f'-C {a["cfg_scale"]}')
+        a = vars(self) | kwargs
+        switches = [
+            f'"{a["prompt"]}"',
+            f'-s {a["steps"]}',
+            f'-S {a["seed"]}',
+            f'-W {a["width"]}',
+            f'-H {a["height"]}',
+            f'-C {a["cfg_scale"]}',
+        ]
+
         if a['perlin'] > 0:
             switches.append(f'--perlin {a["perlin"]}')
         if a['threshold'] > 0:
@@ -229,10 +226,9 @@ class Args(object):
 
         # img2img generations have parameters relevant only to them and have special handling
         if a['init_img'] and len(a['init_img'])>0:
-            switches.append(f'-I {a["init_img"]}')
-            switches.append(f'-A {a["sampler_name"]}')
+            switches.extend((f'-I {a["init_img"]}', f'-A {a["sampler_name"]}'))
             if a['fit']:
-                switches.append(f'--fit')
+                switches.append('--fit')
             if a['init_mask'] and len(a['init_mask'])>0:
                 switches.append(f'-M {a["init_mask"]}')
             if a['init_color'] and len(a['init_color'])>0:
@@ -298,7 +294,7 @@ class Args(object):
 
         if not hasattr(cmd_switches,name) and not hasattr(arg_switches,name):
             raise AttributeError
-        
+
         value_arg,value_cmd = (None,None)
         try:
             value_cmd = getattr(cmd_switches,name)
@@ -314,10 +310,7 @@ class Args(object):
         # the arg value. For example, the --grid and --individual options are a little
         # funny because of their push/pull relationship. This is how to handle it.
         if name=='grid':
-            if cmd_switches.individual:
-                return False
-            else:
-                return value_cmd or value_arg
+            return False if cmd_switches.individual else value_cmd or value_arg
         return value_cmd if value_cmd is not None else value_arg
 
     def __setattr__(self,name,value):
@@ -756,7 +749,7 @@ class Args(object):
         return parser
 
 def format_metadata(**kwargs):
-    print(f'format_metadata() is deprecated. Please use metadata_dumps()')
+    print('format_metadata() is deprecated. Please use metadata_dumps()')
     return metadata_dumps(kwargs)
 
 def metadata_dumps(opt,
@@ -887,27 +880,25 @@ def metadata_loads(metadata) -> list:
 def calculate_init_img_hash(image_string):
     prefix = 'data:image/png;base64,'
     hash   = None
-    if image_string.startswith(prefix):
-        imagebase64 = image_string[len(prefix):]
-        imagedata   = base64.b64decode(imagebase64)
-        with open('outputs/test.png','wb') as file:
-            file.write(imagedata)
-        sha = hashlib.sha256()
-        sha.update(imagedata)
-        hash = sha.hexdigest()
-    else:
-        hash = sha256(image_string)
-    return hash
+    if not image_string.startswith(prefix):
+        return sha256(image_string)
+    imagebase64 = image_string[len(prefix):]
+    imagedata   = base64.b64decode(imagebase64)
+    with open('outputs/test.png','wb') as file:
+        file.write(imagedata)
+    sha = hashlib.sha256()
+    sha.update(imagedata)
+    return sha.hexdigest()
 
 # Bah. This should be moved somewhere else...
 def sha256(path):
     sha = hashlib.sha256()
     with open(path,'rb') as f:
         while True:
-            data = f.read(65536)
-            if not data:
+            if data := f.read(65536):
+                sha.update(data)
+            else:
                 break
-            sha.update(data)
     return sha.hexdigest()
 
 def legacy_metadata_load(meta,pathname) -> Args:
@@ -916,9 +907,8 @@ def legacy_metadata_load(meta,pathname) -> Args:
         opt = Args()
         opt.parse_cmd(dream_prompt)
         return opt
-    else:               # if nothing else, we can get the seed
-        match = re.search('\d+\.(\d+)',pathname)
-        if match:
+    else:           # if nothing else, we can get the seed
+        if match := re.search('\d+\.(\d+)', pathname):
             seed = match.groups()[0]
             opt = Args()
             opt.seed = seed

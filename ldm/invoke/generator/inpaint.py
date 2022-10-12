@@ -26,11 +26,9 @@ class Inpaint(Img2Img):
         """
         # klms samplers not supported yet, so ignore previous sampler
         if isinstance(sampler,KSampler):
-            print(
-                f">> Using recommended DDIM sampler for inpainting."
-            )
+            print(">> Using recommended DDIM sampler for inpainting.")
             sampler = DDIMSampler(self.model, device=self.model.device)
-        
+
         sampler.make_schedule(
             ddim_num_steps=steps, ddim_eta=ddim_eta, verbose=False
         )

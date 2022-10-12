@@ -17,7 +17,7 @@ class GFPGAN():
         self.gfpgan_model_exists = os.path.isfile(self.model_path)
 
         if not self.gfpgan_model_exists:
-            print('## NOT FOUND: GFPGAN model not found at ' + self.model_path)
+            print(f'## NOT FOUND: GFPGAN model not found at {self.model_path}')
             return None
         sys.path.append(os.path.abspath(gfpgan_dir))
 
@@ -46,9 +46,7 @@ class GFPGAN():
                 print(traceback.format_exc(), file=sys.stderr)
 
         if self.gfpgan is None:
-            print(
-                f'>> WARNING: GFPGAN not initialized.'
-            )
+            print('>> WARNING: GFPGAN not initialized.')
             print(
                 f'>> Download https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth to {self.model_path}, \nor change GFPGAN directory with --gfpgan_dir.'
             )

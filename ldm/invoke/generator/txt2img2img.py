@@ -116,7 +116,7 @@ class Txt2Img2Img(Generator):
         else:
             scaled_width = width
             scaled_height = height
-            
+
         device      = self.model.device
         if device.type == 'mps':
             return torch.randn([1,

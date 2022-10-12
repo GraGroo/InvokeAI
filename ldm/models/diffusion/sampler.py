@@ -26,9 +26,8 @@ class Sampler(object):
         self.device   = device or choose_torch_device()
 
     def register_buffer(self, name, attr):
-        if type(attr) == torch.Tensor:
-            if attr.device != torch.device(self.device):
-                attr = attr.to(torch.float32).to(torch.device(self.device))
+        if type(attr) == torch.Tensor and attr.device != torch.device(self.device):
+            attr = attr.to(torch.float32).to(torch.device(self.device))
         setattr(self, name, attr)
 
     # This method was copied over from ddim.py and probably does stuff that is
@@ -217,10 +216,11 @@ class Sampler(object):
     ):
         b = shape[0]
         time_range = (
-            list(reversed(range(0, timesteps)))
+            list(reversed(range(timesteps)))
             if ddim_use_original_steps
             else np.flip(timesteps)
         )
+
 
         total_steps=steps
 
@@ -362,10 +362,7 @@ class Sampler(object):
         return x_dec
 
     def get_initial_image(self,x_T,shape,timesteps=None):
-        if x_T is None:
-            return torch.randn(shape, device=self.device)
-        else:
-            return x_T
+        return torch.randn(shape, device=self.device) if x_T is None else x_T
     
     def p_sample(
             self,

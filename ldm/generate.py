@@ -257,7 +257,7 @@ class Generate:
             catch_interrupts = False,
             hires_fix        = False,
             **args,
-    ):   # eat up additional cruft
+    ):    # eat up additional cruft
         """
         ldm.generate.prompt2image() is the common entry point for txt2img() and img2img()
         It takes the following arguments:
@@ -313,7 +313,7 @@ class Generate:
 
         # will instantiate the model or return it from cache
         model = self.load_model()
-        
+
         for m in model.modules():
             if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
                 m.padding_mode = 'circular' if seamless else m._orig_padding_mode
@@ -330,18 +330,20 @@ class Generate:
                 0.0 <= perlin <= 1.0
         ), '--perlin must be in [0.0, 1.0]'
         assert (
-            (embiggen == None and embiggen_tiles == None) or (
-                (embiggen != None or embiggen_tiles != None) and init_img != None)
+            embiggen is None
+            and embiggen_tiles is None
+            or ((embiggen != None or embiggen_tiles != None) and init_img != None)
         ), 'Embiggen requires an init/input image to be specified'
+
 
         if len(with_variations) > 0 or variation_amount > 1.0:
             assert seed is not None,\
-                'seed must be specified when using with_variations'
+                    'seed must be specified when using with_variations'
             if variation_amount == 0.0:
                 assert iterations == 1,\
-                    'when using --with_variations, multiple iterations are only possible when using --variation_amount'
+                        'when using --with_variations, multiple iterations are only possible when using --variation_amount'
             assert all(0 <= weight <= 1 for _, weight in with_variations),\
-                f'variation weights must be in [0.0, 1.0]: got {[weight for _, weight in with_variations]}'
+                    f'variation weights must be in [0.0, 1.0]: got {[weight for _, weight in with_variations]}'
 
         width, height, _ = self._resolution_check(width, height, log=True)
 
@@ -353,7 +355,7 @@ class Generate:
         if self._has_cuda():
             torch.cuda.reset_peak_memory_stats()
 
-        results = list()
+        results = []
         init_image = None
         mask_image = None
 
@@ -439,19 +441,21 @@ class Generate:
         )
         if self._has_cuda():
             print(
-                f'>>   Max VRAM used for this generation:',
+                '>>   Max VRAM used for this generation:',
                 '%4.2fG.' % (torch.cuda.max_memory_allocated() / 1e9),
                 'Current VRAM utilization:',
                 '%4.2fG' % (torch.cuda.memory_allocated() / 1e9),
             )
 
+
             self.session_peakmem = max(
                 self.session_peakmem, torch.cuda.max_memory_allocated()
             )
             print(
-                f'>>   Max VRAM used since script start: ',
+                '>>   Max VRAM used since script start: ',
                 '%4.2fG' % (self.session_peakmem / 1e9),
             )
+
         return results
 
     # this needs to be generalized to all sorts of postprocessors, which should be wrapped
@@ -486,8 +490,7 @@ class Generate:
         # try to reuse the same filename prefix as the original file.
         # we take everything up to the first period
         prefix = None
-        m    = re.match('^([^.]+)\.',os.path.basename(image_path))
-        if m:
+        if m := re.match('^([^.]+)\.', os.path.basename(image_path)):
             prefix = m.groups()[0]
 
         # face fixers and esrgan take an Image, but embiggen takes a path
@@ -521,9 +524,10 @@ class Generate:
 
         elif tool == 'outcrop':
             from ldm.invoke.restoration.outcrop import Outcrop
-            extend_instructions = {}
-            for direction,pixels in _pairwise(opt.outcrop):
-                extend_instructions[direction]=int(pixels)
+            extend_instructions = {
+                direction: int(pixels)
+                for direction, pixels in _pairwise(opt.outcrop)
+            }
 
             restorer = Outcrop(image,self,)
             return restorer.process (
@@ -565,9 +569,9 @@ class Generate:
                 image_callback = callback,
                 prefix         = prefix
             )
-                
+
         elif tool is None:
-            print(f'* please provide at least one postprocessing option, such as -G or -U')
+            print('* please provide at least one postprocessing option, such as -G or -U')
             return None
         else:
             print(f'* postprocessing tool {tool} is not yet supported')
@@ -601,7 +605,7 @@ class Generate:
             self._transparency_check_and_warning(image, mask)
             # this returns a torch tensor
             init_mask = self._create_init_mask(image, width, height, fit=fit)
-            
+
         if (image.width * image.height) > (self.width * self.height):
             print(">> This input is larger than your defaults. If you run out of memory, please use a smaller image.")
 
@@ -660,8 +664,10 @@ class Generate:
                 model = self._load_model_from_config(self.config, self.weights)
                 if self.embedding_path is not None:
                     model.embedding_manager.load(
-                        self.embedding_path, self.precision == 'float32' or self.precision == 'autocast'
+                        self.embedding_path,
+                        self.precision in ['float32', 'autocast'],
                     )
+
                 self.model = model.to(self.device)
                 # model.to doesn't change the cond_stage_model.device used to move the tokenizer output, so set it here
                 self.model.cond_stage_model.device = self.device
@@ -710,7 +716,7 @@ class Generate:
                                 image_callback = None,
                                 prefix = None,
     ):
-            
+
         for r in image_list:
             image, seed = r
             try:
@@ -813,9 +819,7 @@ class Generate:
 
         # usage statistics
         toc = time.time()
-        print(
-            f'>> Model loaded in', '%4.2fs' % (toc - tic)
-        )
+        print('>> Model loaded in', '%4.2fs' % (toc - tic))
         if self._has_cuda():
             print(
                 '>> Max VRAM used to load the model:',
@@ -910,8 +914,7 @@ class Generate:
             for x in range(width):
                 if pixdata[x, y][3] == 0:
                     r, g, b, _ = pixdata[x, y]
-                    if (r, g, b) != (0, 0, 0) and \
-                       (r, g, b) != (255, 255, 255):
+                    if (r, g, b) not in [(0, 0, 0), (255, 255, 255)]:
                         colored += 1
         return colored == 0
 
@@ -928,9 +931,7 @@ class Generate:
 
     def _squeeze_image(self, image):
         x, y, resize_needed = self._resolution_check(image.width, image.height)
-        if resize_needed:
-            return InitImageResizer(image).resize(x, y)
-        return image
+        return InitImageResizer(image).resize(x, y) if resize_needed else image
 
     def _fit_image(self, image, max_dimensions):
         w, h = max_dimensions
@@ -941,8 +942,6 @@ class Generate:
             h = None   # by setting h to none, we tell InitImageResizer to fit into the width and calculate height
         elif image.height > image.width:
             w = None   # ditto for w
-        else:
-            pass
         # note that InitImageResizer does the multiple of 64 truncation internally
         image = InitImageResizer(image).resize(w, h)
         print(
@@ -973,12 +972,12 @@ class Generate:
         dirname    = os.path.dirname(path)
         basename   = os.path.basename(path)
         base, _    = os.path.splitext(basename)
-        hashpath   = os.path.join(dirname,base+'.sha256')
+        hashpath = os.path.join(dirname, f'{base}.sha256')
         if os.path.exists(hashpath) and os.path.getmtime(path) <= os.path.getmtime(hashpath):
             with open(hashpath) as f:
                 hash = f.read()
             return hash
-        print(f'>> Calculating sha256 hash of weights file')
+        print('>> Calculating sha256 hash of weights file')
         tic = time.time()
         sha = hashlib.sha256()
         sha.update(data)
